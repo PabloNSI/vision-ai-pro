@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision AI Pro - Logs del Sistema</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; color: white; }
+        .log-line { 
+            background: #1e293b; 
+            border-left: 4px solid #3b82f6;
+            padding: 12px; 
+            margin: 8px 0; 
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .log-error { border-left-color: #ef4444; }
+        .log-success { border-left-color: #10b981; }
+        .log-warning { border-left-color: #f59e0b; }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-cyan-300 mb-2">📊 Logs del Sistema - Vision AI Pro</h1>
+        <p class="text-blue-200 mb-6">Monitorea las sesiones y detecciones en tiempo real</p>
+        
+        <!-- Panel de control -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <div class="text-sm text-slate-400">Sesiones Activas</div>
+                <div id="activeSessions" class="text-2xl font-bold text-green-400">0</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <div class="text-sm text-slate-400">Total Detecciones</div>
+                <div id="totalDetections" class="text-2xl font-bold text-blue-400">0</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <div class="text-sm text-slate-400">Total Interacciones</div>
+                <div id="totalInteractions" class="text-2xl font-bold text-purple-400">0</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-lg">
+                <div class="text-sm text-slate-400">Tiempo Activo</div>
+                <div id="uptime" class="text-2xl font-bold text-yellow-400">0s</div>
+            </div>
+        </div>
+        
+        <!-- Botones de control -->
+        <div class="mb-6 flex space-x-4">
+            <button onclick="loadStats()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                🔄 Actualizar
+            </button>
+            <button onclick="clearLogs()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">
+                🗑️ Limpiar visualización
+            </button>
+            <button onclick="goToApp()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+                🚀 Ir a la App
+            </button>
+        </div>
+        
+        <!-- Panel de logs -->
+        <div class="bg-slate-900 rounded-lg p-4 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-cyan-300">📝 Logs en tiempo real</h2>
+                <div class="text-sm text-slate-400" id="lastUpdate">Última actualización: --:--:--</div>
+            </div>
+            <div id="logContainer" class="max-h-[500px] overflow-y-auto">
+                <!-- Los logs se cargarán aquí -->
+            </div>
+        </div>
+        
+        <!-- Lista de archivos de log -->
+        <div class="bg-slate-900 rounded-lg p-4">
+            <h2 class="text-xl font-bold text-cyan-300 mb-4">📁 Archivos de log disponibles</h2>
+            <div id="logFiles" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Los archivos de log se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.location.origin + '/api';
+        
+        async function loadStats() {
+            try {
+                // Cargar estadísticas
+                const statsResponse = await fetch(`${API_BASE_URL}/stats`);
+                const statsData = await statsResponse.json();
+                
+                // Actualizar contadores
+                document.getElementById('activeSessions').textContent = 
+                    statsData.statistics?.activeSessions || 0;
+                document.getElementById('totalDetections').textContent = 
+                    statsData.statistics?.totalDetections || 0;
+                document.getElementById('totalInteractions').textContent = 
+                    statsData.statistics?.totalInteractions || 0;
+                document.getElementById('uptime').textContent = 
+                    `${statsData.uptime || 0}s`;
+                
+                // Actualizar timestamp
+                const now = new Date();
+                document.getElementById('lastUpdate').textContent = 
+                    `Última actualización: ${now.toLocaleTimeString()}`;
+                
+                // Cargar logs recientes
+                await loadRecentLogs();
+                
+                // Cargar lista de archivos de log
+                await loadLogFiles();
+                
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+                showMessage('❌ Error conectando al servidor', 'error');
+            }
+        }
+        
+        async function loadRecentLogs() {
+            try {
+                const logsResponse = await fetch(`${API_BASE_URL}/logs`);
+                const logsData = await logsResponse.json();
+                
+                const logContainer = document.getElementById('logContainer');
+                
+                if (logsData.logs && logsData.logs.length > 0) {
+                    // Tomar los últimos 20 archivos
+                    const recentFiles = logsData.logs.slice(0, 20);
+                    
+                    for (const logFile of recentFiles) {
+                        try {
+                            const fileResponse = await fetch(`${API_BASE_URL}/logs/${encodeURIComponent(logFile.file)}`);
+                            const content = await fileResponse.text();
+                            
+                            // Procesar cada línea del log
+                            const lines = content.split('\n').filter(line => line.trim());
+                            lines.forEach(line => {
+                                try {
+                                    const logEntry = JSON.parse(line);
+                                    addLogToDisplay(logEntry);
+                                } catch (e) {
+                                    // Si no es JSON válido, mostrar como texto
+                                    addLogToDisplay({
+                                        ts: new Date().toISOString(),
+                                        event: 'RAW_LOG',
+                                        data: line
+                                    });
+                                }
+                            });
+                        } catch (error) {
+                            console.error('Error cargando archivo:', logFile.file, error);
+                        }
+                    }
+                } else {
+                    logContainer.innerHTML = '<p class="text-slate-400 p-4">No hay logs disponibles</p>';
+                }
+            } catch (error) {
+                console.error('Error cargando logs:', error);
+            }
+        }
+        
+        async function loadLogFiles() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/logs`);
+                const data = await response.json();
+                
+                const logFilesDiv = document.getElementById('logFiles');
+                logFilesDiv.innerHTML = '';
+                
+                if (data.logs && data.logs.length > 0) {
+                    data.logs.forEach(log => {
+                        const logDiv = document.createElement('div');
+                        logDiv.className = 'bg-slate-800 p-4 rounded hover:bg-slate-700 cursor-pointer';
+                        logDiv.onclick = () => downloadLog(log.file);
+                        
+                        logDiv.innerHTML = `
+                            <div class="font-mono text-sm text-blue-300 truncate">${log.file}</div>
+                            <div class="flex justify-between items-center mt-2">
+                                <span class="text-slate-400 text-sm">${log.size}</span>
+                                <span class="text-slate-500 text-xs">${new Date(log.lastModified).toLocaleDateString()}</span>
+                            </div>
+                        `;
+                        
+                        logFilesDiv.appendChild(logDiv);
+                    });
+                }
+            } catch (error) {
+                console.error('Error cargando archivos de log:', error);
+            }
+        }
+        
+        function addLogToDisplay(logEntry) {
+            const logContainer = document.getElementById('logContainer');
+            const logDiv = document.createElement('div');
+            
+            let logClass = 'log-line';
+            if (logEntry.event.includes('ERROR')) logClass += ' log-error';
+            else if (logEntry.event.includes('SESSION')) logClass += ' log-success';
+            else if (logEntry.event.includes('DETECTION')) logClass += ' log-warning';
+            
+            logDiv.className = logClass;
+            logDiv.innerHTML = `
+                <div class="flex justify-between">
+                    <span class="text-cyan-300 font-bold">${logEntry.event}</span>
+                    <span class="text-slate-400 text-sm">${new Date(logEntry.ts).toLocaleTimeString()}</span>
+                </div>
+                <div class="text-slate-300 text-sm mt-1">${JSON.stringify(logEntry.data, null, 2)}</div>
+            `;
+            
+            // Agregar al principio (logs más recientes primero)
+            logContainer.prepend(logDiv);
+            
+            // Limitar a 100 logs visibles
+            const logs = logContainer.children;
+            if (logs.length > 100) {
+                logContainer.removeChild(logs[logs.length - 1]);
+            }
+        }
+        
+        function downloadLog(filename) {
+            window.open(`${API_BASE_URL}/logs/${encodeURIComponent(filename)}`, '_blank');
+        }
+        
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = 
+                '<p class="text-slate-400 p-4">Logs limpiados. Presiona "Actualizar" para ver logs nuevos.</p>';
+        }
+        
+        function goToApp() {
+            window.location.href = '/';
+        }
+        
+        function showMessage(message, type = 'info') {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'error' ? 'bg-red-600' : 
+                type === 'success' ? 'bg-green-600' : 'bg-blue-600'
+            }`;
+            msgDiv.textContent = message;
+            document.body.appendChild(msgDiv);
+            
+            setTimeout(() => msgDiv.remove(), 3000);
+        }
+        
+        // Cargar estadísticas al inicio
+        loadStats();
+        
+        // Auto-refresh cada 10 segundos
+        setInterval(loadStats, 10000);
+    </script>
+</body>
+</html>
