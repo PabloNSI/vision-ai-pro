@@ -1,7 +1,7 @@
 // ==========================================
 // VISION AI PRO - BACKEND SERVER (VERCEL)
 // ==========================================
-// Autor: Tu nombre
+// Autor: Pablo Soto
 // Fecha: Diciembre 2025
 // Descripción: API Serverless para Vision AI Pro
 // ==========================================
