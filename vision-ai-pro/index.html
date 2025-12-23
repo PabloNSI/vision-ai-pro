@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision AI Pro - OpenCV.js + TensorFlow.js</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <!-- COCO-SSD para detección de objetos -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- BodyPix para segmentación humana -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+    <style>
+        :root {
+            --primary-dark: #0f172a;
+            --primary: #1e293b;
+            --primary-light: #334155;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-light: #60a5fa;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+        
+        body {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+        
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+        }
+        
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: var(--primary);
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            min-height: 400px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            display: block;
+        }
+        
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .stats-panel {
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+        
+        .processing-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 24px;
+            display: none;
+            border: 1px solid var(--accent);
+            font-weight: 500;
+        }
+        
+        .model-info {
+            background: rgba(15, 23, 42, 0.7);
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            border-left: 4px solid var(--accent);
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary:disabled {
+            background: var(--primary-light);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--primary-light);
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--accent-light);
+        }
+        
+        select, input[type="range"] {
+            background: var(--primary);
+            color: var(--text-primary);
+            border: 1px solid var(--primary-light);
+            border-radius: 6px;
+            padding: 8px 12px;
+            width: 100%;
+        }
+        
+        select:focus, input[type="range"]:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        
+        .slider {
+            appearance: none;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--primary-light);
+        }
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+        
+        .detection-item {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--accent);
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--primary-light);
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--accent);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-active {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+        
+        .status-inactive {
+            background: var(--text-muted);
+        }
+        
+        .status-processing {
+            background: var(--warning);
+            box-shadow: 0 0 8px var(--warning);
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .tab-button {
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .tab-button.active {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-light);
+            border-bottom: 2px solid var(--accent);
+        }
+        
+        .section-title {
+            color: var(--accent-light);
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .section-title svg {
+            margin-right: 8px;
+        }
+
+        .server-badge {
+            display: inline-block;
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid #22c55e;
+            color: #86efac;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans p-4 sm:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent tracking-tight">
+                Vision AI Pro
+            </h1>
+            <p class="mt-3 text-lg text-blue-200">Detección avanzada en tiempo real con OpenCV.js y TensorFlow.js</p>
+            <div id="serverBadge" class="server-badge" style="display: none;">
+                📊 Conectado al servidor - Datos enviándose
+            </div>
+            <div class="flex justify-center mt-4 space-x-4">
+                <div class="flex items-center">
+                    <span id="cvStatus" class="status-indicator status-inactive"></span>
+                    <span class="text-sm text-blue-200">OpenCV.js</span>
+                </div>
+                <div class="flex items-center">
+                    <span id="tfStatus" class="status-indicator status-inactive"></span>
+                    <span class="text-sm text-blue-200">TensorFlow.js</span>
+                </div>
+                <div class="flex items-center">
+                    <span id="cameraStatus" class="status-indicator status-inactive"></span>
+                    <span class="text-sm text-blue-200">Cámara</span>
+                </div>
+                <div class="flex items-center">
+                    <span id="serverStatus" class="status-indicator status-inactive"></span>
+                    <span class="text-sm text-blue-200">Servidor</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Panel de Control -->
+        <div class="glass-panel p-6 rounded-xl mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <!-- Control de Cámara -->
+                <div class="space-y-4">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
+                        </svg>
+                        Control de Cámara
+                    </h3>
+                    <div class="flex space-x-2">
+                        <button id="startCamera" class="btn-primary flex-1">
+                            Iniciar Cámara
+                        </button>
+                        <button id="stopCamera" class="btn-secondary flex-1" disabled>
+                            Detener
+                        </button>
+                    </div>
+                    <div class="space-y-2">
+                        <label for="cameraSelect" class="block text-sm font-medium text-blue-200">Seleccionar Cámara</label>
+                        <select id="cameraSelect" disabled>
+                            <option value="">Cargando cámaras...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Modelos de IA -->
+                <div class="space-y-4">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clip-rule="evenodd" />
+                        </svg>
+                        Modelos de IA
+                    </h3>
+                    <div class="space-y-2">
+                        <label for="modelSelect" class="block text-sm font-medium text-blue-200">Modelo de Detección</label>
+                        <select id="modelSelect">
+                            <option value="coco-ssd">COCO-SSD (Objetos + Personas)</option>
+                            <option value="bodypix">BodyPix (Segmentación Humana)</option>
+                            <option value="combined">Combinado (Objetos + Segmentación)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label for="confidenceThreshold" class="block text-sm font-medium text-blue-200">
+                            Umbral de Confianza: <span id="confidenceValue" class="text-cyan-300">0.5</span>
+                        </label>
+                        <input type="range" id="confidenceThreshold" min="0" max="1" step="0.1" value="0.5" class="slider">
+                    </div>
+                </div>
+
+                <!-- Filtros OpenCV -->
+                <div class="space-y-4">
+                    <h3 class="section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clip-rule="evenodd" />
+                        </svg>
+                        Procesamiento OpenCV
+                    </h3>
+                    <div class="space-y-2">
+                        <label for="filterSelect" class="block text-sm font-medium text-blue-200">Filtro de Post-procesamiento</label>
+                        <select id="filterSelect">
+                            <option value="none">Sin filtro</option>
+                            <option value="blur">Desenfoque</option>
+                            <option value="edge">Detección de bordes</option>
+                            <option value="grayscale">Escala de grises</option>
+                            <option value="invert">Invertir colores</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="showStats" checked>
+                            <span class="toggle-slider"></span>
+                        </div>
+                        <label for="showStats" class="text-sm font-medium text-blue-200">Mostrar estadísticas</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información del Modelo -->
+            <div id="modelInfo" class="model-info">
+                <h4 class="font-semibold text-cyan-300">COCO-SSD</h4>
+                <p class="text-sm text-blue-200 mt-1">Detecta 80 clases de objetos incluyendo personas, vehículos, animales y objetos comunes.</p>
+            </div>
+        </div>
+
+        <!-- Área de Visualización -->
+        <div class="grid grid-cols-1 gap-8">
+            <div class="space-y-4">
+                <h2 class="text-xl font-semibold text-cyan-300 text-center">Vista de Cámara con Detección en Tiempo Real</h2>
+                <div class="canvas-container">
+                    <video id="webcam" autoplay playsinline class="hidden"></video>
+                    <canvas id="outputCanvas"></canvas>
+                    <canvas id="overlayCanvas" class="overlay"></canvas>
+                    <div id="processingIndicator" class="processing-indicator">
+                        <span class="status-indicator status-processing mr-2"></span>
+                        Procesando frame...
+                    </div>
+                    <div id="statsPanel" class="stats-panel">
+                        <div class="font-medium text-cyan-300 mb-2">Estadísticas</div>
+                        <div class="space-y-1 text-sm">
+                            <div>FPS: <span id="fpsCounter" class="text-cyan-300">0</span></div>
+                            <div>Objetos detectados: <span id="objectsCounter" class="text-cyan-300">0</span></div>
+                            <div>Personas detectadas: <span id="peopleCounter" class="text-cyan-300">0</span></div>
+                        </div>
+                    </div>
+                    <p id="cameraPlaceholder" class="text-blue-300 p-8 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Presione "Iniciar Cámara" para comenzar
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Resultados -->
+        <div class="mt-8 glass-panel p-6 rounded-xl">
+            <h3 class="text-xl font-semibold text-cyan-300 mb-4">Resultados de Detección</h3>
+            <div id="detectionResults" class="space-y-2 max-h-60 overflow-y-auto">
+                <p class="text-blue-300 text-center p-4">Los resultados aparecerán aquí</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cargar OpenCV.js -->
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady()"></script>
+
+    <script>
+        // ==========================================
+// REGISTRAR ACCESO A LA PÁGINA
+// ==========================================
+(async function registerAccess() {
+  try {
+    const accessData = {
+      timestamp: new Date().toISOString(),
+      path: window.location.pathname,
+      userAgent: navigator.userAgent,
+      screenSize: `${window.screen.width}x${window.screen.height}`,
+      referrer: document.referrer || 'direct'
+    };
+
+    // Solo registrar si tenemos sessionId (después de initializeTelemetry)
+    if (sessionId) {
+      accessData.sessionId = sessionId;
+    }
+
+    await fetch(`${API_BASE_URL}/api/session/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    console.log('✅ Acceso registrado en servidor');
+  } catch (error) {
+    console.log('⚠️ No se pudo registrar acceso (servidor offline?)');
+  }
+})();
+        // ==========================================
+        // CONFIGURACIÓN DE TELEMETRÍA
+        // ==========================================
+        const API_BASE_URL = '/api';
+        let sessionId = null;
+        let telemetryEnabled = true;
+        let detectionCounter = 0;
+
+        // Inicializar sesión al cargar la página
+        async function initializeTelemetry() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/session/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                sessionId = data.sessionId;
+                document.getElementById('serverStatus').className = 'status-indicator status-active';
+                document.getElementById('serverBadge').style.display = 'block';
+                console.log('✅ Sesión iniciada:', sessionId);
+            } catch (error) {
+                console.error('Error inicializando telemetría:', error);
+                telemetryEnabled = false;
+            }
+        }
+
+        // Registrar detecciones (cada 5 frames)
+        async function recordDetection(faceCount, objectCount, confidenceLevel) {
+            if (!sessionId || !telemetryEnabled) return;
+            
+            detectionCounter++;
+            if (detectionCounter < 5) return; // Registrar cada 5 frames para no sobrecargar
+            detectionCounter = 0;
+            
+            try {
+                await fetch(`${API_BASE_URL}/api/detection/record`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        faceCount,
+                        objectCount,
+                        confidenceLevel,
+                        detectionType: modelSelect.value,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } catch (error) {
+                console.error('Error registrando detección:', error);
+            }
+        }
+
+        // Registrar interacciones
+        async function recordInteraction(widgetName, action, value) {
+            if (!sessionId || !telemetryEnabled) return;
+            
+            try {
+                await fetch(`${API_BASE_URL}/api/interaction/record`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId,
+                        widgetName,
+                        action,
+                        value,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } catch (error) {
+                console.error('Error registrando interacción:', error);
+            }
+        }
+
+        // Finalizar sesión al cerrar la página
+        window.addEventListener('beforeunload', async () => {
+            if (!sessionId || !telemetryEnabled) return;
+            
+            try {
+                await fetch(`${API_BASE_URL}/api/session/end`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId })
+                });
+            } catch (error) {
+                console.error('Error finalizando sesión:', error);
+            }
+        });
+
+        // ==========================================
+        // ESTADO DE LA APLICACIÓN
+        // ==========================================
+        let isCvReady = false;
+        let isCameraActive = false;
+        let stream = null;
+        let model = null;
+        let bodyPixModel = null;
+        
+        let frameCount = 0;
+        let fps = 0;
+        let lastFpsUpdate = Date.now();
+        let isProcessing = false;
+        
+        // Elementos DOM
+        const webcam = document.getElementById('webcam');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const startCameraButton = document.getElementById('startCamera');
+        const stopCameraButton = document.getElementById('stopCamera');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const modelSelect = document.getElementById('modelSelect');
+        const filterSelect = document.getElementById('filterSelect');
+        const confidenceThreshold = document.getElementById('confidenceThreshold');
+        const confidenceValue = document.getElementById('confidenceValue');
+        const showStats = document.getElementById('showStats');
+        const processingIndicator = document.getElementById('processingIndicator');
+        const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+        const statsPanel = document.getElementById('statsPanel');
+        const fpsCounter = document.getElementById('fpsCounter');
+        const objectsCounter = document.getElementById('objectsCounter');
+        const peopleCounter = document.getElementById('peopleCounter');
+        const detectionResults = document.getElementById('detectionResults');
+        const modelInfo = document.getElementById('modelInfo');
+        const cvStatus = document.getElementById('cvStatus');
+        const tfStatus = document.getElementById('tfStatus');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const serverStatus = document.getElementById('serverStatus');
+
+        const outputCtx = outputCanvas.getContext('2d');
+        const overlayCtx = overlayCanvas.getContext('2d');
+
+        const classColors = {
+            'person': '#3b82f6',
+            'bicycle': '#60a5fa',
+            'car': '#2563eb',
+            'motorcycle': '#1d4ed8',
+            'airplane': '#1e40af',
+            'bus': '#1e3a8a',
+            'train': '#3730a3',
+            'truck': '#4338ca',
+            'boat': '#4f46e5',
+            'cat': '#6366f1',
+            'dog': '#818cf8',
+            'default': '#60a5fa'
+        };
+
+        // ==========================================
+        // INICIALIZACIÓN DE OPENCV
+        // ==========================================
+        window.onOpenCvReady = function() {
+            isCvReady = true;
+            cvStatus.className = 'status-indicator status-active';
+            updateStatus('OpenCV.js cargado. Cargando modelos de IA...');
+            loadAIModels();
+        };
+
+        // ==========================================
+        // CARGA DE MODELOS DE IA
+        // ==========================================
+        async function loadAIModels() {
+            try {
+                updateStatus('Cargando modelo COCO-SSD...');
+                model = await cocoSsd.load();
+                
+                updateStatus('Cargando modelo BodyPix...');
+                bodyPixModel = await bodyPix.load({
+                    architecture: 'MobileNetV1',
+                    outputStride: 16,
+                    multiplier: 0.75,
+                    quantBytes: 2
+                });
+                
+                tfStatus.className = 'status-indicator status-active';
+                updateStatus('Modelos cargados. Iniciando telemetría...');
+                startCameraButton.disabled = false;
+                
+                await initializeTelemetry();
+                updateModelInfo();
+            } catch (error) {
+                updateStatus('Error cargando modelos: ' + error.message, true);
+            }
+        }
+
+        // ==========================================
+        // CONTROL DE CÁMARA
+        // ==========================================
+        startCameraButton.addEventListener('click', async () => {
+            if (isCameraActive) return;
+            
+            try {
+                await getCameraDevices();
+                
+                const constraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'environment'
+                    }
+                };
+                
+                if (cameraSelect.value) {
+                    constraints.video.deviceId = { exact: cameraSelect.value };
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                webcam.srcObject = stream;
+                
+                recordInteraction('startCamera', 'click', 'Cámara iniciada');
+                
+                webcam.addEventListener('loadeddata', () => {
+                    outputCanvas.width = webcam.videoWidth;
+                    outputCanvas.height = webcam.videoHeight;
+                    overlayCanvas.width = webcam.videoWidth;
+                    overlayCanvas.height = webcam.videoHeight;
+                    
+                    cameraPlaceholder.classList.add('hidden');
+                    webcam.classList.remove('hidden');
+                    
+                    isCameraActive = true;
+                    cameraStatus.className = 'status-indicator status-active';
+                    startCameraButton.disabled = true;
+                    stopCameraButton.disabled = false;
+                    cameraSelect.disabled = true;
+                    
+                    updateStatus('Cámara activa. Iniciando detección...');
+                    
+                    // Iniciar bucle de procesamiento
+                    processVideo();
+                });
+            } catch (error) {
+                updateStatus('Error al acceder a la cámara: ' + error.message, true);
+            }
+        });
+
+        stopCameraButton.addEventListener('click', () => {
+            if (!isCameraActive) return;
+            
+            // Detener stream
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // Limpiar canvas
+            outputCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            
+            // Restablecer UI
+            isCameraActive = false;
+            cameraStatus.className = 'status-indicator status-inactive';
+            startCameraButton.disabled = false;
+            stopCameraButton.disabled = true;
+            cameraSelect.disabled = false;
+            webcam.classList.add('hidden');
+            cameraPlaceholder.classList.remove('hidden');
+            
+            updateStatus('Cámara detenida.');
+        });
+
+        // ==========================================
+        // DETECCIÓN Y PROCESAMIENTO EN TIEMPO REAL
+        // ==========================================
+        async function processVideo() {
+            if (!isCameraActive) return;
+            
+            // Actualizar contador de FPS
+            frameCount++;
+            const now = Date.now();
+            if (now - lastFpsUpdate >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsUpdate = now;
+                fpsCounter.textContent = fps;
+            }
+            
+            // Dibujar frame actual en el canvas de salida
+            outputCtx.drawImage(webcam, 0, 0, outputCanvas.width, outputCanvas.height);
+            
+            // Limpiar canvas de superposición
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            
+            // Solo procesar si no estamos ya procesando
+            if (!isProcessing) {
+                isProcessing = true;
+                processingIndicator.style.display = 'flex';
+                
+                try {
+                    // Obtener el modelo seleccionado
+                    const selectedModel = modelSelect.value;
+                    const confThreshold = parseFloat(confidenceThreshold.value);
+                    
+                    let detections = [];
+                    let segmentation = null;
+                    
+                    // Ejecutar detección según el modelo seleccionado
+                    if (selectedModel === 'coco-ssd' || selectedModel === 'combined') {
+                        detections = await model.detect(webcam);
+                        // Filtrar por umbral de confianza
+                        detections = detections.filter(d => d.score >= confThreshold);
+                    }
+                    
+                    if (selectedModel === 'bodypix' || selectedModel === 'combined') {
+                        segmentation = await bodyPixModel.segmentPersonParts(webcam, {
+                            flipHorizontal: false,
+                            internalResolution: 'medium',
+                            segmentationThreshold: 0.7
+                        });
+                    }
+                    
+                    // Dibujar resultados
+                    if (selectedModel === 'coco-ssd' || selectedModel === 'combined') {
+                        drawDetections(detections);
+                        updateDetectionResults(detections);
+                    }
+                    
+                    if (selectedModel === 'bodypix' || selectedModel === 'combined') {
+                        drawSegmentation(segmentation);
+                    }
+                    
+                    // Aplicar filtro OpenCV si está seleccionado
+                    applyOpenCVFilter();
+                    
+                    // Actualizar contadores
+                    updateCounters(detections);
+                    
+                    // Telemetría: registrar detecciones
+                    const peopleCount = detections.filter(d => d.class === 'person').length;
+                    const objectCount = detections.length - peopleCount;
+                    const confidenceLevel = detections.length > 0 ? 
+                        detections.reduce((acc, d) => acc + d.score, 0) / detections.length : 0;
+                    
+                    await recordDetection(peopleCount, objectCount, confidenceLevel);
+                    
+                } catch (error) {
+                    console.error('Error en procesamiento:', error);
+                } finally {
+                    isProcessing = false;
+                    processingIndicator.style.display = 'none';
+                }
+            }
+            
+            // Continuar el bucle
+            requestAnimationFrame(processVideo);
+        }
+
+        // ==========================================
+        // DIBUJADO DE RESULTADOS
+        // ==========================================
+        function drawDetections(detections) {
+            detections.forEach(detection => {
+                const [x, y, width, height] = detection.bbox;
+                const className = detection.class;
+                const score = (detection.score * 100).toFixed(1);
+                
+                // Obtener color para la clase
+                const color = classColors[className] || classColors['default'];
+                
+                // Dibujar cuadro delimitador
+                overlayCtx.strokeStyle = color;
+                overlayCtx.lineWidth = 2;
+                overlayCtx.strokeRect(x, y, width, height);
+                
+                // Dibujar fondo para la etiqueta
+                overlayCtx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+                overlayCtx.fillRect(x, y - 25, 150, 25);
+                
+                // Dibujar texto de la etiqueta
+                overlayCtx.fillStyle = color;
+                overlayCtx.font = 'bold 14px Arial';
+                overlayCtx.fillText(`${className} ${score}%`, x + 5, y - 8);
+            });
+        }
+
+        function drawSegmentation(segmentation) {
+            if (!segmentation) return;
+            
+            const { width, height, data } = segmentation;
+            
+            // Crear imagen de máscara
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = width;
+            maskCanvas.height = height;
+            const maskCtx = maskCanvas.getContext('2d');
+            
+            const imageData = maskCtx.createImageData(width, height);
+            const { data: imageDataArray } = imageData;
+            
+            // Colorear las partes del cuerpo con tonos azulados
+            const partColors = [
+                [59, 130, 246, 150],   // Cara - azul
+                [96, 165, 250, 150],   // Torso - azul claro
+                [37, 99, 235, 150],    // Brazos - azul medio
+                [30, 64, 175, 150],    // Piernas - azul oscuro
+            ];
+            
+            for (let i = 0; i < data.length; i++) {
+                const partId = data[i];
+                if (partId !== -1) {
+                    const color = partColors[partId % partColors.length];
+                    const idx = i * 4;
+                    imageDataArray[idx] = color[0];     // R
+                    imageDataArray[idx + 1] = color[1]; // G
+                    imageDataArray[idx + 2] = color[2]; // B
+                    imageDataArray[idx + 3] = color[3]; // A
+                }
+            }
+            
+            maskCtx.putImageData(imageData, 0, 0);
+            
+            // Dibujar la máscara en el canvas de superposición
+            overlayCtx.globalAlpha = 0.6;
+            overlayCtx.drawImage(maskCanvas, 0, 0, overlayCanvas.width, overlayCanvas.height);
+            overlayCtx.globalAlpha = 1.0;
+        }
+
+        // ==========================================
+        // FILTROS OPENCV
+        // ==========================================
+        function applyOpenCVFilter() {
+            if (!isCvReady) return;
+            
+            const filter = filterSelect.value;
+            if (filter === 'none') return;
+            
+            try {
+                // Convertir canvas a Mat de OpenCV
+                const src = cv.imread(outputCanvas);
+                let dst = new cv.Mat();
+                
+                switch(filter) {
+                    case 'blur':
+                        let ksize = new cv.Size(15, 15);
+                        cv.GaussianBlur(src, dst, ksize, 0);
+                        break;
+                    case 'edge':
+                        let gray = new cv.Mat();
+                        cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                        cv.Canny(gray, dst, 50, 150);
+                        gray.delete();
+                        break;
+                    case 'grayscale':
+                        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+                        break;
+                    case 'invert':
+                        cv.bitwise_not(src, dst);
+                        break;
+                }
+                
+                // Aplicar el resultado al canvas
+                cv.imshow(outputCanvas, dst);
+                
+                // Liberar memoria
+                src.delete();
+                dst.delete();
+            } catch (error) {
+                console.error('Error aplicando filtro OpenCV:', error);
+            }
+        }
+
+        // ==========================================
+        // FUNCIONES AUXILIARES
+        // ==========================================
+        async function getCameraDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                cameraSelect.innerHTML = '';
+                videoDevices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Cámara ${cameraSelect.length + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+                
+                if (videoDevices.length > 0) {
+                    cameraSelect.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error enumerando dispositivos:', error);
+            }
+        }
+
+        function updateDetectionResults(detections) {
+            detectionResults.innerHTML = '';
+            
+            if (detections.length === 0) {
+                detectionResults.innerHTML = '<p class="text-blue-300 text-center p-4">No se detectaron objetos</p>';
+                return;
+            }
+            
+            detections.forEach(detection => {
+                const div = document.createElement('div');
+                div.className = 'detection-item';
+                
+                const className = detection.class;
+                const score = (detection.score * 100).toFixed(1);
+                const color = classColors[className] || classColors['default'];
+                
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full mr-2" style="background-color: ${color}"></div>
+                            <span class="font-medium text-cyan-200">${className}</span>
+                        </div>
+                        <div class="text-sm text-blue-300">${score}% de confianza</div>
+                    </div>
+                `;
+                
+                detectionResults.appendChild(div);
+            });
+        }
+
+        function updateCounters(detections) {
+            const objects = detections.length;
+            const people = detections.filter(d => d.class === 'person').length;
+            
+            objectsCounter.textContent = objects;
+            peopleCounter.textContent = people;
+            
+            // Mostrar/ocultar panel de estadísticas
+            statsPanel.style.display = showStats.checked ? 'block' : 'none';
+        }
+
+        function updateModelInfo() {
+            const selectedModel = modelSelect.value;
+            
+            switch(selectedModel) {
+                case 'coco-ssd':
+                    modelInfo.innerHTML = `
+                        <h4 class="font-semibold text-cyan-300">COCO-SSD</h4>
+                        <p class="text-sm text-blue-200 mt-1">Detecta 80 clases de objetos incluyendo personas, vehículos, animales y objetos comunes.</p>
+                    `;
+                    break;
+                case 'bodypix':
+                    modelInfo.innerHTML = `
+                        <h4 class="font-semibold text-cyan-300">BodyPix</h4>
+                        <p class="text-sm text-blue-200 mt-1">Segmentación del cuerpo humano en 24 partes. Ideal para análisis de postura y movimiento.</p>
+                    `;
+                    break;
+                case 'combined':
+                    modelInfo.innerHTML = `
+                        <h4 class="font-semibold text-cyan-300">Combinado</h4>
+                        <p class="text-sm text-blue-200 mt-1">Combina COCO-SSD para detección de objetos y BodyPix para segmentación humana.</p>
+                    `;
+                    break;
+            }
+        }
+
+        function updateStatus(message, isError = false) {
+            const statusElement = document.querySelector('header p');
+            statusElement.textContent = message;
+            statusElement.className = `mt-3 text-lg ${isError ? 'text-red-400' : 'text-blue-200'}`;
+        }
+
+        // ==========================================
+        // EVENT LISTENERS
+        // ==========================================
+        modelSelect.addEventListener('change', updateModelInfo);
+        
+        confidenceThreshold.addEventListener('input', () => {
+            confidenceValue.textContent = confidenceThreshold.value;
+        });
+        
+        // Inicialización
+        updateModelInfo();
+    </script>
+</body>
+</html>
