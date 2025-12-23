@@ -1,31 +1,13 @@
 {
-  "name": "vision-ai-pro-backend",
+  "name": "vision-ai-pro",
   "version": "1.0.0",
-  "description": "Backend API para Vision AI Pro - Telemetría y análisis de datos",
   "main": "api/index.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "node api/index.js",
-    "dev": "nodemon api/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node api/index.js"
   },
-  "keywords": [
-    "vision",
-    "ai",
-    "opencv",
-    "tensorflow",
-    "telemetry",
-    "express"
-  ],
-  "author": "Tu Nombre",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "express-rate-limit": "^7.0.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
+    "cors": "^2.8.5"
   },
   "engines": {
     "node": "18.x"
