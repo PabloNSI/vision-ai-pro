@@ -1,7 +1,7 @@
 // ==========================================
 // VISION AI PRO - BACKEND SERVER (VERCEL)
 // ==========================================
-// Autor: Pablo Soto
+// Autor: Tu nombre
 // Fecha: Diciembre 2025
 // Descripción: API Serverless para Vision AI Pro
 // ==========================================
@@ -31,6 +31,9 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Servir archivos estáticos desde la carpeta public
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Rate limiting para API
 const apiLimiter = rateLimit({
@@ -107,26 +110,201 @@ function validateSession(sessionId) {
 }
 
 // ==========================================
+// RUTAS DEL FRONTEND (HTML)
+// ==========================================
+
+// RUTA PRINCIPAL - Sirve la aplicación Vision AI Pro
+app.get('/', (req, res) => {
+  try {
+    const htmlPath = path.join(__dirname, '../public/index.html');
+    
+    // Verificar si el archivo existe
+    if (!fs.existsSync(htmlPath)) {
+      // Si no existe, servir un HTML básico
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Vision AI Pro</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; }
+            h1 { color: #3b82f6; font-size: 2.5rem; margin-bottom: 20px; }
+            .container { max-width: 600px; margin: 0 auto; }
+            .card { background: rgba(30, 41, 59, 0.8); padding: 30px; border-radius: 10px; margin: 20px 0; border: 1px solid rgba(59, 130, 246, 0.3); }
+            .status { background: #10b981; color: white; padding: 12px 24px; border-radius: 8px; display: inline-block; font-weight: bold; }
+            a { color: #60a5fa; text-decoration: none; margin: 0 10px; }
+            a:hover { text-decoration: underline; }
+            .endpoint { background: #1e293b; padding: 10px; border-radius: 5px; margin: 5px 0; font-family: monospace; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🤖 Vision AI Pro</h1>
+            <div class="card">
+              <p>Backend API funcionando correctamente</p>
+              <div class="status">✅ Servidor activo</div>
+              
+              <div style="margin-top: 30px;">
+                <h3>📡 Endpoints disponibles:</h3>
+                <div class="endpoint">GET <a href="/api/health">/api/health</a></div>
+                <div class="endpoint">GET <a href="/api/stats">/api/stats</a></div>
+                <div class="endpoint">GET <a href="/api/logs">/api/logs</a></div>
+                <div class="endpoint">POST /api/session/start</div>
+                <div class="endpoint">POST /api/detection/record</div>
+              </div>
+              
+              <div style="margin-top: 30px;">
+                <p>El frontend principal (index.html) no se encontró en la carpeta public/</p>
+                <p>Por favor, asegúrate de que el archivo existe.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Servir el archivo HTML real
+    res.sendFile(htmlPath);
+  } catch (error) {
+    console.error('❌ Error sirviendo HTML:', error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: Arial; padding: 50px; text-align: center;">
+          <h1 style="color: #ef4444;">Error 500</h1>
+          <p>Error cargando la aplicación Vision AI Pro</p>
+          <p><a href="/api/health">Verificar estado del servidor</a></p>
+        </body>
+      </html>
+    `);
+  }
+});
+
+// RUTA PARA EL PANEL DE LOGS
+app.get('/logs.html', (req, res) => {
+  try {
+    const logsPath = path.join(__dirname, '../public/logs.html');
+    
+    if (!fs.existsSync(logsPath)) {
+      // Si no existe logs.html, servir uno básico
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Logs - Vision AI Pro</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; background: #0f172a; color: white; }
+            h1 { color: #3b82f6; margin-bottom: 10px; }
+            .container { max-width: 1200px; margin: 0 auto; }
+            .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 20px 0; }
+            .stat-card { background: #1e293b; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; }
+            .log-panel { background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .log-entry { background: #0f172a; padding: 15px; margin: 10px 0; border-radius: 6px; font-family: 'Courier New', monospace; font-size: 14px; }
+            button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin: 5px; }
+            button:hover { background: #2563eb; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>📊 Logs del Sistema - Vision AI Pro</h1>
+            <p>Panel de administración para monitorear sesiones y detecciones</p>
+            
+            <div class="stats-grid" id="statsGrid">
+              <!-- Las estadísticas se cargarán aquí -->
+            </div>
+            
+            <div>
+              <button onclick="loadStats()">🔄 Actualizar</button>
+              <button onclick="loadLogs()">📁 Ver Logs</button>
+              <button onclick="window.location.href='/'">🏠 Ir a la App</button>
+            </div>
+            
+            <div class="log-panel">
+              <h3>📝 Logs en tiempo real</h3>
+              <div id="logContainer" style="max-height: 500px; overflow-y: auto; margin-top: 15px;">
+                <!-- Los logs aparecerán aquí -->
+              </div>
+            </div>
+          </div>
+          
+          <script>
+            const API_BASE_URL = window.location.origin + '/api';
+            
+            async function loadStats() {
+              try {
+                const response = await fetch(API_BASE_URL + '/stats');
+                const data = await response.json();
+                
+                document.getElementById('statsGrid').innerHTML = \`
+                  <div class="stat-card">
+                    <div style="font-size: 12px; color: #94a3b8;">Sesiones Totales</div>
+                    <div style="font-size: 2rem; font-weight: bold; color: #10b981;">\${data.statistics?.totalSessions || 0}</div>
+                  </div>
+                  <div class="stat-card">
+                    <div style="font-size: 12px; color: #94a3b8;">Detecciones</div>
+                    <div style="font-size: 2rem; font-weight: bold; color: #3b82f6;">\${data.statistics?.totalDetections || 0}</div>
+                  </div>
+                  <div class="stat-card">
+                    <div style="font-size: 12px; color: #94a3b8;">Interacciones</div>
+                    <div style="font-size: 2rem; font-weight: bold; color: #8b5cf6;">\${data.statistics?.totalInteractions || 0}</div>
+                  </div>
+                  <div class="stat-card">
+                    <div style="font-size: 12px; color: #94a3b8;">Sesiones Activas</div>
+                    <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">\${data.statistics?.activeSessions || 0}</div>
+                  </div>
+                \`;
+              } catch (error) {
+                console.error('Error cargando stats:', error);
+              }
+            }
+            
+            async function loadLogs() {
+              try {
+                const response = await fetch(API_BASE_URL + '/logs');
+                const data = await response.json();
+                
+                const logContainer = document.getElementById('logContainer');
+                logContainer.innerHTML = '';
+                
+                if (data.logs && data.logs.length > 0) {
+                  data.logs.slice(0, 10).forEach(log => {
+                    const logDiv = document.createElement('div');
+                    logDiv.className = 'log-entry';
+                    logDiv.innerHTML = \`
+                      <div style="color: #60a5fa; font-weight: bold;">\${log.file}</div>
+                      <div style="color: #94a3b8; font-size: 12px;">\${log.size} - \${new Date(log.lastModified).toLocaleString()}</div>
+                    \`;
+                    logContainer.appendChild(logDiv);
+                  });
+                } else {
+                  logContainer.innerHTML = '<p style="color: #94a3b8;">No hay logs disponibles</p>';
+                }
+              } catch (error) {
+                console.error('Error cargando logs:', error);
+              }
+            }
+            
+            // Cargar estadísticas al inicio
+            loadStats();
+            loadLogs();
+          </script>
+        </body>
+        </html>
+      `);
+    }
+    
+    res.sendFile(logsPath);
+  } catch (error) {
+    console.error('❌ Error sirviendo logs.html:', error);
+    res.status(500).send('Error cargando el panel de logs');
+  }
+});
+
+// ==========================================
 // RUTAS DE LA API
 // ==========================================
 
-// 1️⃣ RUTA DE SALUDO
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Vision AI Pro API - Serverless',
-    version: '1.0.0',
-    status: 'online',
-    endpoints: {
-      api: '/api/*',
-      docs: 'https://github.com/tu-usuario/vision-ai-pro',
-      frontend: '/ (aplicación principal)',
-      logs: '/logs.html (panel de administración)'
-    },
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 2️⃣ HEALTH CHECK
+// 1️⃣ HEALTH CHECK
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -145,7 +323,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 3️⃣ INICIAR SESIÓN
+// 2️⃣ INICIAR SESIÓN
 app.post('/api/session/start', (req, res) => {
   try {
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -184,7 +362,7 @@ app.post('/api/session/start', (req, res) => {
       timestamp: sessionData.startTime.toISOString()
     });
   } catch (error) {
-    console.error('Error en session/start:', error);
+    console.error('❌ Error en session/start:', error);
     res.status(500).json({
       success: false,
       error: 'Error interno del servidor'
@@ -192,7 +370,7 @@ app.post('/api/session/start', (req, res) => {
   }
 });
 
-// 4️⃣ REGISTRAR DETECCIONES
+// 3️⃣ REGISTRAR DETECCIONES
 app.post('/api/detection/record', (req, res) => {
   try {
     const { sessionId, faceCount = 0, objectCount = 0, confidenceLevel, detectionType } = req.body;
@@ -250,7 +428,7 @@ app.post('/api/detection/record', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en detection/record:', error);
+    console.error('❌ Error en detection/record:', error);
     res.status(500).json({
       success: false,
       error: 'Error procesando detección'
@@ -258,7 +436,7 @@ app.post('/api/detection/record', (req, res) => {
   }
 });
 
-// 5️⃣ REGISTRAR INTERACCIONES
+// 4️⃣ REGISTRAR INTERACCIONES
 app.post('/api/interaction/record', (req, res) => {
   try {
     const { sessionId, widgetName, action, value } = req.body;
@@ -308,7 +486,7 @@ app.post('/api/interaction/record', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en interaction/record:', error);
+    console.error('❌ Error en interaction/record:', error);
     res.status(500).json({
       success: false,
       error: 'Error procesando interacción'
@@ -316,7 +494,7 @@ app.post('/api/interaction/record', (req, res) => {
   }
 });
 
-// 6️⃣ FINALIZAR SESIÓN
+// 5️⃣ FINALIZAR SESIÓN
 app.post('/api/session/end', (req, res) => {
   try {
     const { sessionId } = req.body;
@@ -369,7 +547,7 @@ app.post('/api/session/end', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en session/end:', error);
+    console.error('❌ Error en session/end:', error);
     res.status(500).json({
       success: false,
       error: 'Error finalizando sesión'
@@ -377,7 +555,7 @@ app.post('/api/session/end', (req, res) => {
   }
 });
 
-// 7️⃣ OBTENER ESTADÍSTICAS
+// 6️⃣ OBTENER ESTADÍSTICAS
 app.get('/api/stats', (req, res) => {
   try {
     const activeSessions = Array.from(stats.sessions.values())
@@ -427,7 +605,7 @@ app.get('/api/stats', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en /api/stats:', error);
+    console.error('❌ Error en /api/stats:', error);
     res.status(500).json({
       success: false,
       error: 'Error obteniendo estadísticas'
@@ -435,7 +613,7 @@ app.get('/api/stats', (req, res) => {
   }
 });
 
-// 8️⃣ LISTAR ARCHIVOS DE LOG
+// 7️⃣ LISTAR ARCHIVOS DE LOG
 app.get('/api/logs', (req, res) => {
   try {
     if (!fs.existsSync(LOGS_DIR)) {
@@ -476,7 +654,7 @@ app.get('/api/logs', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en /api/logs:', error);
+    console.error('❌ Error en /api/logs:', error);
     res.status(500).json({
       success: false,
       error: 'Error accediendo a los logs'
@@ -484,7 +662,7 @@ app.get('/api/logs', (req, res) => {
   }
 });
 
-// 9️⃣ VER CONTENIDO DE ARCHIVO DE LOG
+// 8️⃣ VER CONTENIDO DE ARCHIVO DE LOG
 app.get('/api/logs/:logFile', (req, res) => {
   try {
     const logFile = req.params.logFile;
@@ -525,7 +703,7 @@ app.get('/api/logs/:logFile', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en /api/logs/:logFile:', error);
+    console.error('❌ Error en /api/logs/:logFile:', error);
     res.status(500).json({
       error: 'Error leyendo el archivo de log',
       success: false
@@ -533,7 +711,7 @@ app.get('/api/logs/:logFile', (req, res) => {
   }
 });
 
-// 🔟 DESCARGAR ARCHIVO DE LOG
+// 9️⃣ DESCARGAR ARCHIVO DE LOG
 app.get('/api/logs/download/:logFile', (req, res) => {
   try {
     const logFile = req.params.logFile;
@@ -556,7 +734,7 @@ app.get('/api/logs/download/:logFile', (req, res) => {
 
     res.download(logPath, decodedFileName, (err) => {
       if (err) {
-        console.error('Error descargando archivo:', err);
+        console.error('❌ Error descargando archivo:', err);
         res.status(500).json({
           error: 'Error descargando el archivo',
           success: false
@@ -564,7 +742,7 @@ app.get('/api/logs/download/:logFile', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error en /api/logs/download/:logFile:', error);
+    console.error('❌ Error en /api/logs/download/:logFile:', error);
     res.status(500).json({
       error: 'Error procesando la descarga',
       success: false
@@ -572,7 +750,7 @@ app.get('/api/logs/download/:logFile', (req, res) => {
   }
 });
 
-// 1️⃣1️⃣ ELIMINAR ARCHIVOS DE LOG ANTIGUOS
+// 🔟 ELIMINAR ARCHIVOS DE LOG ANTIGUOS
 app.delete('/api/logs/cleanup', (req, res) => {
   try {
     const { days = 7 } = req.query;
@@ -609,7 +787,7 @@ app.delete('/api/logs/cleanup', (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error en cleanup:', error);
+    console.error('❌ Error en cleanup:', error);
     res.status(500).json({
       success: false,
       error: 'Error limpiando logs'
@@ -618,24 +796,64 @@ app.delete('/api/logs/cleanup', (req, res) => {
 });
 
 // ==========================================
-// MANEJO DE ERRORES
+// RUTA CATCH-ALL PARA SPA (Single Page App)
 // ==========================================
-
-// 404 - Ruta no encontrada
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Ruta no encontrada',
-    path: req.path,
-    method: req.method,
-    timestamp: new Date().toISOString()
-  });
+app.get('*', (req, res) => {
+  // Si es una ruta API, ya debería haber sido manejada
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: 'Ruta API no encontrada',
+      path: req.path
+    });
+  }
+  
+  // Para cualquier otra ruta, intentar servir el frontend
+  try {
+    const htmlPath = path.join(__dirname, '../public/index.html');
+    
+    if (fs.existsSync(htmlPath)) {
+      return res.sendFile(htmlPath);
+    }
+    
+    // Si no existe index.html, mostrar página de error amigable
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>404 - Página no encontrada</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #0f172a; color: white; }
+          h1 { color: #ef4444; font-size: 3rem; }
+          .container { max-width: 600px; margin: 0 auto; }
+          a { color: #60a5fa; text-decoration: none; }
+          a:hover { text-decoration: underline; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>404</h1>
+          <p>La página que buscas no existe.</p>
+          <p><a href="/">Volver al inicio</a></p>
+          <p><a href="/api/health">Verificar estado del servidor</a></p>
+          <p><a href="/logs.html">Ir a logs</a></p>
+        </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('❌ Error en ruta catch-all:', error);
+    res.status(500).send('Error interno del servidor');
+  }
 });
 
-// Error handler global
+// ==========================================
+// MANEJO DE ERRORES GLOBAL
+// ==========================================
 app.use((err, req, res, next) => {
   console.error('❌ Error global:', err);
   
+  // Log del error
   logToFile('SERVER_ERROR', {
     error: err.message,
     stack: err.stack,
@@ -665,6 +883,7 @@ if (require.main === module) {
     console.log(`
 🚀 Vision AI Pro API iniciada en puerto ${PORT}
 📊 API disponible en: http://localhost:${PORT}/api
+🏠 Frontend en: http://localhost:${PORT}/
 📁 Logs en: ${LOGS_DIR}
     `);
   });
